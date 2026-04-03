@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "description": "Process YouTube videos to generate summaries, notes, and flashcards",
+  "main": "index.ts",
+  "permissions": [
+    "--allow-net",
+    "--allow-env",
+    "--allow-read"
+  ],
+  "env": [
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "GOOGLE_AI_KEY"
+  ]
+}
