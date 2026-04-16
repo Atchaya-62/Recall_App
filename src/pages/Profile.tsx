@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Loader2, Mail, Save, Shield, UserCircle2, Video, FolderOpen, BookMarked } from 'lucide-react';
+import { Check, Loader2, Lock, Mail, Save, Shield, UserCircle2, Video, FolderOpen, BookMarked } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAllFlashcards, useFolders, useVideos } from '@/hooks/useData';
@@ -24,7 +24,7 @@ const getInitials = (name: string): string =>
     .toUpperCase();
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, updatePassword } = useAuth();
   const { data: folders = [], isLoading: foldersLoading } = useFolders();
   const { data: videos = [], isLoading: videosLoading } = useVideos();
   const { data: flashcards = [], isLoading: flashcardsLoading } = useAllFlashcards();
@@ -32,6 +32,9 @@ export default function Profile() {
   const initialName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
   const [displayName, setDisplayName] = useState(initialName);
   const [isSaving, setIsSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const stats = useMemo(() => {
     const masteredCount = flashcards.filter((card) => card.mastered).length;
@@ -45,6 +48,34 @@ export default function Profile() {
   }, [videos, folders, flashcards]);
 
   const isLoading = foldersLoading || videosLoading || flashcardsLoading;
+
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await updatePassword(newPassword);
+      if (error) {
+        throw error;
+      }
+
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Password set successfully. You can now log in with email and password.');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update password.');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     const nextName = displayName.trim();
@@ -143,6 +174,39 @@ export default function Profile() {
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400" />
                 <span>Account status: Active</span>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <div className="text-gray-400">Set Password for Email Login</div>
+                <p className="text-xs text-gray-500">
+                  Use this if you want to sign in with email + password. You can also update an existing password here.
+                </p>
+                <div className="space-y-2">
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder="New password"
+                    minLength={6}
+                    className="h-11 glass border-white/20"
+                  />
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Confirm new password"
+                    minLength={6}
+                    className="h-11 glass border-white/20"
+                  />
+                </div>
+                <Button
+                  onClick={handleUpdatePassword}
+                  disabled={isUpdatingPassword}
+                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-semibold"
+                >
+                  {isUpdatingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lock className="mr-2 h-4 w-4" />}
+                  Set Password
+                </Button>
               </div>
             </div>
           </div>

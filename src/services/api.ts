@@ -1,15 +1,60 @@
 import { supabase } from '@/lib/supabase';
 import { Folder, Video, Flashcard } from '@/types';
 
+async function getCurrentUserOrThrow() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  return user;
+}
+
+async function ensureVideoOwnership(videoId: string, userId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('videos')
+    .select('id')
+    .eq('id', videoId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error('You do not have access to this video');
+}
+
+async function ensureVideosOwnership(videoIds: string[], userId: string): Promise<void> {
+  if (videoIds.length === 0) return;
+
+  const { data, error } = await supabase
+    .from('videos')
+    .select('id')
+    .eq('user_id', userId)
+    .in('id', videoIds);
+
+  if (error) throw error;
+
+  const ownedIds = new Set((data || []).map((row) => row.id));
+  const hasUnauthorizedVideo = videoIds.some((id) => !ownedIds.has(id));
+  if (hasUnauthorizedVideo) {
+    throw new Error('You do not have access to one or more videos');
+  }
+}
+
 // Folders API
 export const foldersApi = {
   getAll: async (): Promise<Folder[]> => {
+    const user = await getCurrentUserOrThrow();
+
     const { data, error } = await supabase
       .from('folders')
       .select(`
         *,
         videos:videos(count)
       `)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -26,10 +71,13 @@ export const foldersApi = {
   },
 
   getById: async (id: string): Promise<Folder> => {
+    const user = await getCurrentUserOrThrow();
+
     const { data, error } = await supabase
       .from('folders')
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -45,8 +93,7 @@ export const foldersApi = {
   },
 
   create: async (name: string, color: string): Promise<Folder> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCurrentUserOrThrow();
 
     const { data, error } = await supabase
       .from('folders')
@@ -67,6 +114,8 @@ export const foldersApi = {
   },
 
   update: async (id: string, updates: Partial<Folder>): Promise<Folder> => {
+    const user = await getCurrentUserOrThrow();
+
     const dbUpdates: any = {};
     if (updates.name) dbUpdates.name = updates.name;
     if (updates.color) dbUpdates.color = updates.color;
@@ -75,6 +124,7 @@ export const foldersApi = {
       .from('folders')
       .update(dbUpdates)
       .eq('id', id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
@@ -91,10 +141,13 @@ export const foldersApi = {
   },
 
   delete: async (id: string): Promise<void> => {
+    const user = await getCurrentUserOrThrow();
+
     const { error } = await supabase
       .from('folders')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) throw error;
   },
@@ -103,12 +156,15 @@ export const foldersApi = {
 // Videos API
 export const videosApi = {
   getAll: async (): Promise<Video[]> => {
+    const user = await getCurrentUserOrThrow();
+
     const { data, error } = await supabase
       .from('videos')
       .select(`
         *,
         flashcards:flashcards(count)
       `)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -116,6 +172,8 @@ export const videosApi = {
   },
 
   getByFolder: async (folderId: string): Promise<Video[]> => {
+    const user = await getCurrentUserOrThrow();
+
     const { data, error } = await supabase
       .from('videos')
       .select(`
@@ -123,6 +181,7 @@ export const videosApi = {
         flashcards:flashcards(count)
       `)
       .eq('folder_id', folderId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -130,6 +189,8 @@ export const videosApi = {
   },
 
   getById: async (id: string): Promise<Video> => {
+    const user = await getCurrentUserOrThrow();
+
     const { data, error } = await supabase
       .from('videos')
       .select(`
@@ -137,6 +198,7 @@ export const videosApi = {
         flashcards:flashcards(count)
       `)
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -144,8 +206,7 @@ export const videosApi = {
   },
 
   create: async (video: Partial<Video>): Promise<Video> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCurrentUserOrThrow();
 
     // Auto-categorize when folder is not explicitly provided.
     let resolvedFolderId: string | null = video.folderId || null;
@@ -224,6 +285,8 @@ export const videosApi = {
   },
 
   update: async (id: string, updates: Partial<Video>): Promise<Video> => {
+    const user = await getCurrentUserOrThrow();
+
     const dbUpdates: any = {};
     if (updates.folderId !== undefined) dbUpdates.folder_id = updates.folderId;
     if (updates.title) dbUpdates.title = updates.title;
@@ -237,6 +300,7 @@ export const videosApi = {
       .from('videos')
       .update(dbUpdates)
       .eq('id', id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
@@ -245,10 +309,13 @@ export const videosApi = {
   },
 
   delete: async (id: string): Promise<void> => {
+    const user = await getCurrentUserOrThrow();
+
     const { error } = await supabase
       .from('videos')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) throw error;
   },
@@ -257,6 +324,9 @@ export const videosApi = {
 // Flashcards API
 export const flashcardsApi = {
   getByVideo: async (videoId: string): Promise<Flashcard[]> => {
+    const user = await getCurrentUserOrThrow();
+    await ensureVideoOwnership(videoId, user.id);
+
     const { data, error } = await supabase
       .from('flashcards')
       .select('*')
@@ -268,9 +338,12 @@ export const flashcardsApi = {
   },
 
   getAll: async (): Promise<Flashcard[]> => {
+    const user = await getCurrentUserOrThrow();
+
     const { data, error } = await supabase
       .from('flashcards')
-      .select('*')
+      .select('*, videos!inner(user_id)')
+      .eq('videos.user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -278,6 +351,17 @@ export const flashcardsApi = {
   },
 
   update: async (id: string, updates: Partial<Flashcard>): Promise<Flashcard> => {
+    const user = await getCurrentUserOrThrow();
+
+    const { data: existingCard, error: existingCardError } = await supabase
+      .from('flashcards')
+      .select('id, video_id')
+      .eq('id', id)
+      .single();
+
+    if (existingCardError) throw existingCardError;
+    await ensureVideoOwnership(existingCard.video_id, user.id);
+
     const dbUpdates: any = {};
     if (updates.question) dbUpdates.question = updates.question;
     if (updates.answer) dbUpdates.answer = updates.answer;
@@ -296,6 +380,10 @@ export const flashcardsApi = {
   },
 
   bulkCreate: async (flashcards: Array<Omit<Flashcard, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Flashcard[]> => {
+    const user = await getCurrentUserOrThrow();
+    const uniqueVideoIds = Array.from(new Set(flashcards.map((fc) => fc.videoId)));
+    await ensureVideosOwnership(uniqueVideoIds, user.id);
+
     const dbFlashcards = flashcards.map(fc => ({
       video_id: fc.videoId,
       question: fc.question,

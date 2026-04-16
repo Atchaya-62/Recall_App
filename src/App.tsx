@@ -5,20 +5,27 @@ import Dashboard from '@/pages/Dashboard';
 import Folder from '@/pages/Folder';
 import VideoDetail from '@/pages/VideoDetail';
 import FlashcardReview from '@/pages/FlashcardReview';
+import Challenges from '@/pages/Challenges';
 import ProcessVideo from '@/pages/ProcessVideo';
 import Profile from '@/pages/Profile';
+import CourseGenerator from '@/pages/CourseGenerator';
+import Courses from '@/pages/Courses';
 import Login from '@/pages/Login';
 import Signup from '@/pages/Signup';
+import ResetPassword from '@/pages/ResetPassword';
 import { Toaster } from '@/components/ui/sonner';
+import PlatformLearningTracker from '@/components/PlatformLearningTracker';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <PlatformLearningTracker />
       <div className="min-h-screen bg-background text-foreground">
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Protected routes */}
           <Route
@@ -67,6 +74,15 @@ export default function App() {
             }
           />
           <Route
+            path="/challenges"
+            element={
+              <ProtectedRoute>
+                <Navbar />
+                <Challenges />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/process"
             element={
               <ProtectedRoute>
@@ -81,6 +97,24 @@ export default function App() {
               <ProtectedRoute>
                 <Navbar />
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/course-generator"
+            element={
+              <ProtectedRoute>
+                <Navbar />
+                <CourseGenerator />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/courses"
+            element={
+              <ProtectedRoute>
+                <Navbar />
+                <Courses />
               </ProtectedRoute>
             }
           />

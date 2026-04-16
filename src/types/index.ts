@@ -58,3 +58,66 @@ export interface ProcessingStatus {
   updatedAt: string;
 }
 
+export type CourseLevel = 'Beginner' | 'Intermediate' | 'Advanced';
+
+export type CourseGoal =
+  | 'Placements'
+  | 'Competitive Programming'
+  | 'Concepts'
+  | 'Interview Prep';
+
+export interface CourseGeneratorInput {
+  topic: string;
+  programmingLanguage?: string;
+  currentLevel: CourseLevel;
+  goal: CourseGoal;
+}
+
+export interface CourseVideoItem {
+  title: string;
+  educator?: string;
+  url?: string;
+}
+
+export interface CourseModuleQuiz {
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation?: string;
+  sourceVideoTitle?: string;
+}
+
+export interface CourseModule {
+  id: string;
+  name: string;
+  conceptsCovered: string[];
+  difficultyLevel: string;
+  expectedOutcome: string;
+  videos: CourseVideoItem[];
+  quizzes: CourseModuleQuiz[];
+}
+
+export interface CourseCheckpoint {
+  title: string;
+  afterModule: number;
+  quizTopics: string[];
+  practiceSuggestions: string[];
+}
+
+export interface CourseTrackingDefinition {
+  completionPercent: number;
+  completedModules: number;
+  totalModules: number;
+  quizScores: number[];
+}
+
+export interface GeneratedCoursePlan {
+  id: string;
+  title: string;
+  overview: string;
+  modules: CourseModule[];
+  checkpoints: CourseCheckpoint[];
+  tracking: CourseTrackingDefinition;
+  finalOutcome: string;
+}
+

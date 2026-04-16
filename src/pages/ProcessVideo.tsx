@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { videosApi } from '@/services/api';
+import { recordChallengeEvent } from '../lib/challenges';
 
 interface ProcessingStatus {
   id: string;
@@ -63,10 +64,13 @@ const extractInvokeErrorMessage = async (invokeError: unknown): Promise<string> 
     } catch {
       try {
         const rawText = await invokeError.context.text();
-        return rawText || 'Edge function returned an invalid response';
+        if (rawText && rawText.trim()) {
+          return rawText.trim();
+        }
       } catch {
-        return 'Edge function returned an invalid response';
+        // Ignore
       }
+      return 'Edge function returned an invalid response';
     }
   }
 
@@ -230,6 +234,8 @@ export default function ProcessVideo() {
           });
           return;
         }
+
+        recordChallengeEvent('video_added');
 
         setVideoId(newVideo.id);
         setProcessing({

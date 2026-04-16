@@ -1,21 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { foldersApi, videosApi, flashcardsApi } from '@/services/api';
 import { Folder, Video, Flashcard } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ========== Folders Hooks ==========
 
 export function useFolders() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['folders'],
+    queryKey: ['folders', user?.id],
     queryFn: foldersApi.getAll,
+    enabled: !!user,
   });
 }
 
 export function useFolder(id: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['folders', id],
+    queryKey: ['folders', user?.id, id],
     queryFn: () => foldersApi.getById(id),
-    enabled: !!id,
+    enabled: !!id && !!user,
   });
 }
 
@@ -55,25 +59,29 @@ export function useDeleteFolder() {
 // ========== Videos Hooks ==========
 
 export function useVideos() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['videos'],
+    queryKey: ['videos', user?.id],
     queryFn: videosApi.getAll,
+    enabled: !!user,
   });
 }
 
 export function useVideosByFolder(folderId: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['videos', 'folder', folderId],
+    queryKey: ['videos', user?.id, 'folder', folderId],
     queryFn: () => videosApi.getByFolder(folderId),
-    enabled: !!folderId,
+    enabled: !!folderId && !!user,
   });
 }
 
 export function useVideo(id: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['videos', id],
+    queryKey: ['videos', user?.id, id],
     queryFn: () => videosApi.getById(id),
-    enabled: !!id,
+    enabled: !!id && !!user,
   });
 }
 
@@ -115,17 +123,20 @@ export function useDeleteVideo() {
 // ========== Flashcards Hooks ==========
 
 export function useFlashcards(videoId: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['flashcards', videoId],
+    queryKey: ['flashcards', user?.id, videoId],
     queryFn: () => flashcardsApi.getByVideo(videoId),
-    enabled: !!videoId,
+    enabled: !!videoId && !!user,
   });
 }
 
 export function useAllFlashcards() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['flashcards', 'all'],
+    queryKey: ['flashcards', user?.id, 'all'],
     queryFn: flashcardsApi.getAll,
+    enabled: !!user,
   });
 }
 

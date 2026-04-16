@@ -1,2 +1,5 @@
 [functions.process-video]
 verify_jwt = false
+
+[functions.generate-course]
+verify_jwt = false

@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "description": "Generate personalized course plans with validated YouTube links",
+  "main": "index.ts",
+  "permissions": [
+    "--allow-net",
+    "--allow-env"
+  ],
+  "env": [
+    "GROQ_API_KEY",
+    "YOUTUBE_API_KEY"
+  ]
+}

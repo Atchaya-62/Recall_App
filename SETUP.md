@@ -259,6 +259,107 @@ CREATE TRIGGER on_auth_user_created
    - Search for "Google+ API" and enable it
    - Search for "Generative Language API" and enable it
 
+---
+
+## AI Course Generator (Supabase Edge Function + YouTube API)
+
+The app no longer uses n8n for course generation.
+
+Course generation now runs through a backend Edge Function:
+- Function name: `generate-course`
+- Frontend call: `supabase.functions.invoke('generate-course', { body: ... })`
+
+### Required Secrets (Supabase)
+
+Set these in Supabase project secrets:
+
+```bash
+supabase secrets set GOOGLE_AI_KEY=your_google_ai_key
+supabase secrets set YOUTUBE_API_KEY=your_youtube_data_api_key
+```
+
+Notes:
+- `YOUTUBE_API_KEY` is mandatory for valid video links.
+- `GOOGLE_AI_KEY` is optional; if missing, the function falls back to a template module plan.
+
+### Enable YouTube Data API
+
+1. Open Google Cloud Console.
+2. Enable `YouTube Data API v3`.
+3. Create API Key.
+4. Restrict key to `YouTube Data API v3`.
+
+### Deploy Edge Function
+
+From project root:
+
+```bash
+supabase functions deploy generate-course
+```
+
+For local development:
+
+```bash
+supabase functions serve generate-course --env-file .env.local
+```
+
+### Backend Request Payload
+
+```json
+{
+  "input": {
+    "topic": "DSA",
+    "programmingLanguage": "Python",
+    "currentLevel": "Beginner",
+    "goal": "Placements"
+  },
+  "masterPrompt": "...",
+  "promptInput": "..."
+}
+```
+
+### Backend Response Shape
+
+```json
+{
+  "plan": {
+    "id": "...",
+    "title": "...",
+    "overview": "...",
+    "modules": [
+      {
+        "id": "module-1",
+        "name": "...",
+        "conceptsCovered": ["..."],
+        "difficultyLevel": "...",
+        "expectedOutcome": "...",
+        "videos": [
+          {
+            "title": "...",
+            "educator": "...",
+            "url": "https://www.youtube.com/watch?v=..."
+          }
+        ],
+        "quizzes": []
+      }
+    ],
+    "checkpoints": [],
+    "tracking": {
+      "completionPercent": 0,
+      "completedModules": 0,
+      "totalModules": 0,
+      "quizScores": []
+    },
+    "finalOutcome": "..."
+  }
+}
+```
+
+Validation rules enforced by app:
+- All modules must have at least 2 unique valid YouTube watch links.
+- Generic module titles are rejected.
+- Placeholder video titles are rejected.
+
 3. **Create OAuth 2.0 Credentials**
    - Go to "APIs & Services" → "Credentials"
    - Click "Create Credentials" → "OAuth 2.0 Client ID"

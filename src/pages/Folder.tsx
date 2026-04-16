@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FolderPlus, Search, Loader2 } from 'lucide-react';
 import FolderCard from '@/components/features/FolderCard';
 import VideoCard from '@/components/features/VideoCard';
-import { useFolders, useVideosByFolder, useCreateFolder, useUpdateVideo, useDeleteVideo, useDeleteFolder } from '@/hooks/useData';
+import { useFolders, useVideos, useVideosByFolder, useCreateFolder, useUpdateVideo, useDeleteVideo, useDeleteFolder } from '@/hooks/useData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
+import { semanticSearchVideos } from '@/lib/semanticSearch';
 
 export default function Folders() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +50,7 @@ export default function Folders() {
 
   // Fetch real data using React Query
   const { data: folders = [], isLoading: foldersLoading, error: foldersError } = useFolders();
+  const { data: allVideos = [], isLoading: allVideosLoading } = useVideos();
   const {
     data: folderVideos = [],
     isLoading: videosLoading,
@@ -60,11 +62,24 @@ export default function Folders() {
   const deleteVideoMutation = useDeleteVideo();
   const deleteFolderMutation = useDeleteFolder();
 
-  const isLoading = foldersLoading || (selectedFolder && videosLoading);
+  const isLoading = foldersLoading || allVideosLoading || (selectedFolder && videosLoading);
 
   const filteredFolders = folders.filter(folder =>
     folder.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const semanticResults = useMemo(
+    () => semanticSearchVideos(searchQuery, allVideos, folders, 60),
+    [searchQuery, allVideos, folders]
+  );
+
+  const semanticVideos = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+
+    return semanticResults
+      .map((result) => allVideos.find((video) => video.id === result.videoId))
+      .filter((video): video is NonNullable<typeof video> => !!video);
+  }, [semanticResults, allVideos, searchQuery]);
 
   const selectedFolderData = folders.find(f => f.id === selectedFolder);
 
@@ -295,7 +310,7 @@ export default function Folders() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
                   type="text"
-                  placeholder="Search folders..."
+                  placeholder="Semantic search across your videos..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-12 h-12 glass border-white/20"
@@ -332,42 +347,66 @@ export default function Folders() {
             {/* Folders Grid */}
             {!selectedFolder ? (
               <div>
-                <h2 className="text-2xl font-bold mb-6">All Folders ({filteredFolders.length})</h2>
-                {filteredFolders.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr">
-                    {filteredFolders.map((folder, index) => (
-                      <div
-                        key={folder.id}
-                        style={{ animationDelay: `${index * 50}ms` }}
-                        className="animate-fade-in-up"
-                      >
-                        <FolderCard
-                          folder={folder}
-                          onClick={() => navigate(`/folder/${folder.id}`)}
-                        />
+                {searchQuery.trim() ? (
+                  <>
+                    <h2 className="text-2xl font-bold mb-6">Related Videos ({semanticVideos.length})</h2>
+                    {semanticVideos.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                        {semanticVideos.map((video, index) => (
+                          <div
+                            key={video.id}
+                            style={{ animationDelay: `${index * 50}ms` }}
+                            className="animate-fade-in-up"
+                          >
+                            <VideoCard
+                              video={video}
+                              folderName={video.folderId ? folders.find((f) => f.id === video.folderId)?.name : undefined}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="glass rounded-2xl p-12 text-center">
-                    <FolderPlus className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold mb-2">No folders found</h3>
-                    <p className="text-gray-400 mb-6">
-                      {searchQuery
-                        ? `No folders match "${searchQuery}"`
-                        : "Create your first folder to get started"}
-                    </p>
-                    {!searchQuery && (
-                      <Button
-                        onClick={() => setIsCreateFolderOpen(true)}
-                        disabled={createFolderMutation.isPending}
-                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold"
-                      >
-                        <FolderPlus className="w-5 h-5 mr-2" />
-                        Create Your First Folder
-                      </Button>
+                    ) : (
+                      <div className="glass rounded-2xl p-12 text-center">
+                        <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold mb-2">No related videos found</h3>
+                        <p className="text-gray-400">Try broader concepts or different terms.</p>
+                      </div>
                     )}
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-bold mb-6">All Folders ({filteredFolders.length})</h2>
+                    {filteredFolders.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr">
+                        {filteredFolders.map((folder, index) => (
+                          <div
+                            key={folder.id}
+                            style={{ animationDelay: `${index * 50}ms` }}
+                            className="animate-fade-in-up"
+                          >
+                            <FolderCard
+                              folder={folder}
+                              onClick={() => navigate(`/folder/${folder.id}`)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="glass rounded-2xl p-12 text-center">
+                        <FolderPlus className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold mb-2">No folders found</h3>
+                        <p className="text-gray-400 mb-6">Create your first folder to get started</p>
+                        <Button
+                          onClick={() => setIsCreateFolderOpen(true)}
+                          disabled={createFolderMutation.isPending}
+                          className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold"
+                        >
+                          <FolderPlus className="w-5 h-5 mr-2" />
+                          Create Your First Folder
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
