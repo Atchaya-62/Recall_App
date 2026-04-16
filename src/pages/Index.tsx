@@ -24,10 +24,10 @@ const Index = () => {
               size="lg"
               className="relative z-10 h-12 px-8 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold"
             >
-              <Link to="/login">
+              <a href="https://recall-cyan.vercel.app/login">
                 Get Started
                 <ArrowRight className="ml-2 w-4 h-4" />
-              </Link>
+              </a>
             </Button>
           </div>
         </div>
@@ -44,10 +44,10 @@ const Index = () => {
               size="lg"
               className="h-12 px-8 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold"
             >
-              <Link to="/login">
+              <a href="https://recall-cyan.vercel.app/login">
                 Get Started
                 <ArrowRight className="ml-2 w-4 h-4" />
-              </Link>
+              </a>
             </Button>
           </div>
         </div>
