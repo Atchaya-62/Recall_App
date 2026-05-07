@@ -23,6 +23,11 @@ interface GeneratedContent {
     question: string;
     answer: string;
   }>;
+  transcript?: {
+    original: string;
+    originalLanguage: string;
+    english: string;
+  };
 }
 
 interface VideoOwnerRecord {
@@ -49,22 +54,51 @@ function normalizeProviderError(status: number, body: string, model: string): st
   return `Google AI API error (${status}) while using model ${model}.`;
 }
 
-function normalizeGroqError(status: number, body: string, model: string): string {
-  const lowerBody = body.toLowerCase();
-
-  if (status === 429 || lowerBody.includes('rate') || lowerBody.includes('quota')) {
-    return 'Groq rate limit reached right now. Please try again shortly.';
+async function translateTranscriptWithGemini(text: string, sourceLanguage: string): Promise<string> {
+  const googleApiKey = Deno.env.get('GOOGLE_AI_KEY');
+  if (!googleApiKey) {
+    console.warn('[translateTranscriptWithGemini] No Google AI key available, returning original text');
+    return text;
   }
 
-  if (status === 401 || status === 403) {
-    return 'Groq request was denied. Verify GROQ_API_KEY and model access.';
-  }
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${googleApiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Translate the following ${sourceLanguage} text to English. Provide only the English translation without any additional comments or explanations:\n\n${text}`
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+        }
+      })
+    });
 
-  if (status === 404) {
-    return `Groq model ${model} is unavailable.`;
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`[translateTranscriptWithGemini] API error: ${response.status} - ${errorText}`);
+      return text; // Return original text on error
+    }
 
-  return `Groq API error (${status}) while using model ${model}.`;
+    const data = await response.json();
+    const translatedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+    if (!translatedText) {
+      console.warn('[translateTranscriptWithGemini] No translation received, returning original text');
+      return text;
+    }
+
+    return translatedText;
+  } catch (error) {
+    console.warn('[translateTranscriptWithGemini] Translation failed:', error);
+    return text; // Return original text on error
+  }
 }
 
 serve(async (req) => {
@@ -107,6 +141,9 @@ serve(async (req) => {
 
     const ownerUserId = videoRow.user_id;
 
+    // Get user's language preference for content generation
+    const { data: userData, error: userError } = await supabaseClient.auth.admin.getUserById(ownerUserId);
+
     await updateProcessingStatus(supabaseClient, videoId, ownerUserId, 'extracting', 'Analyzing video for categorization...', 10);
 
     // Extract video description early for faster folder naming
@@ -130,11 +167,16 @@ serve(async (req) => {
 
     await updateProcessingStatus(supabaseClient, videoId, ownerUserId, 'extracting', 'Extracting video transcript...', 20);
 
-    const sourceText = await buildKnowledgeSource(youtubeUrl || videoRow.youtube_url);
+    const knowledgeSource = await buildKnowledgeSource(youtubeUrl || videoRow.youtube_url);
 
     await updateProcessingStatus(supabaseClient, videoId, ownerUserId, 'generating', 'Generating summary and notes...', 50);
 
-    const content = await generateContent(sourceText, videoRow.title || null);
+    const content = await generateContent(knowledgeSource.sourceText, videoRow.title || null);
+
+    // Add transcript information to content if available
+    if (knowledgeSource.transcriptInfo) {
+      content.transcript = knowledgeSource.transcriptInfo;
+    }
 
     // Use description-based folder name if available, otherwise fall back to AI-generated name
     const finalFolderName = preferredFolderName || content.folderName;
@@ -142,14 +184,21 @@ serve(async (req) => {
 
     await updateProcessingStatus(supabaseClient, videoId, ownerUserId, 'generating', 'Saving results...', 70);
 
+    const videoUpdateData: any = {
+      folder_id: resolvedFolderId,
+      title: content.refinedTitle,
+      summary: content.summary,
+      notes: content.notes.map(formatNoteForStorage),
+    };
+
+    // Add transcript data if available
+    if (content.transcript) {
+      videoUpdateData.transcript = content.transcript;
+    }
+
     const { error: videoUpdateError } = await supabaseClient
       .from('videos')
-      .update({
-        folder_id: resolvedFolderId,
-        title: content.refinedTitle,
-        summary: content.summary,
-        notes: content.notes.map(formatNoteForStorage),
-      })
+      .update(videoUpdateData)
       .eq('id', videoId)
       .eq('user_id', ownerUserId);
 
@@ -263,7 +312,7 @@ async function updateProcessingStatus(
   }
 }
 
-async function extractTranscript(youtubeUrl: string): Promise<string> {
+async function extractTranscript(youtubeUrl: string): Promise<{ text: string; language: string; translatedText?: string }> {
   const videoId = extractVideoId(youtubeUrl);
   if (!videoId) {
     throw new Error('Invalid YouTube URL');
@@ -319,13 +368,36 @@ async function extractTranscript(youtubeUrl: string): Promise<string> {
     throw new Error('Transcript is too short to generate detailed notes and flashcards.');
   }
 
-  return transcript.slice(0, 120000);
+  const languageCode = preferredTrack.languageCode || 'unknown';
+  let translatedText: string | undefined;
+
+  // If the transcript is not in English, translate it
+  if (languageCode !== 'en' && languageCode !== 'unknown') {
+    console.log(`[extractTranscript] Translating ${languageCode} transcript to English`);
+    translatedText = await translateTranscriptWithGemini(transcript, languageCode);
+  }
+
+  return {
+    text: transcript,
+    language: languageCode,
+    translatedText
+  };
 }
 
-async function buildKnowledgeSource(youtubeUrl: string): Promise<string> {
+async function buildKnowledgeSource(youtubeUrl: string): Promise<{ sourceText: string; transcriptInfo?: { original: string; language: string; english: string } }> {
   try {
-    const transcript = await extractTranscript(youtubeUrl);
-    return `SOURCE_TYPE: transcript\n\n${transcript}`;
+    const transcriptResult = await extractTranscript(youtubeUrl);
+    const sourceText = transcriptResult.translatedText || transcriptResult.text;
+    const transcriptInfo = transcriptResult.translatedText ? {
+      original: transcriptResult.text,
+      language: transcriptResult.language,
+      english: transcriptResult.translatedText
+    } : undefined;
+
+    return {
+      sourceText: `SOURCE_TYPE: transcript\n\n${sourceText}`,
+      transcriptInfo
+    };
   } catch (transcriptError) {
     console.warn('Transcript extraction failed, using page context fallback:', transcriptError);
   }
@@ -333,7 +405,9 @@ async function buildKnowledgeSource(youtubeUrl: string): Promise<string> {
   try {
     const pageContext = await extractVideoContextFromPage(youtubeUrl);
     if (pageContext.length >= 40) {
-      return `SOURCE_TYPE: metadata_page\n\n${pageContext}`;
+      return {
+        sourceText: `SOURCE_TYPE: metadata_page\n\n${pageContext}`
+      };
     }
   } catch (pageContextError) {
     console.warn('Page context extraction failed, using oEmbed fallback:', pageContextError);
@@ -342,14 +416,18 @@ async function buildKnowledgeSource(youtubeUrl: string): Promise<string> {
   try {
     const oembedContext = await extractVideoContextFromOEmbed(youtubeUrl);
     if (oembedContext.length >= 20) {
-      return `SOURCE_TYPE: metadata_oembed\n\n${oembedContext}`;
+      return {
+        sourceText: `SOURCE_TYPE: metadata_oembed\n\n${oembedContext}`
+      };
     }
   } catch (oembedError) {
     console.warn('oEmbed context extraction failed, using minimal fallback:', oembedError);
   }
 
   const fallbackVideoId = extractVideoId(youtubeUrl) || 'unknown-video';
-  return `SOURCE_TYPE: minimal\n\nVideo URL: ${youtubeUrl}\nVideo ID: ${fallbackVideoId}`;
+  return {
+    sourceText: `SOURCE_TYPE: minimal\n\nVideo URL: ${youtubeUrl}\nVideo ID: ${fallbackVideoId}`
+  };
 }
 
 async function extractVideoContextFromPage(youtubeUrl: string): Promise<string> {
@@ -560,15 +638,12 @@ async function generateContent(sourceText: string, videoTitle: string | null): P
 
 Your task is to analyze the transcript/content and generate HIGH-QUALITY study material strictly based on the ACTUAL TOPIC of the video.
 
-INPUT:
-- Video title (may be noisy or clickbait): ${videoTitle || 'Unknown title'}
-- Transcript/content source text
 
 OUTPUT FORMAT (STRICT JSON ONLY):
 {
   "folder_name": "short, specific topic label (2-4 words max)",
   "refined_title": "professional title that reflects the true topic",
-  "summary": "4-5 concise lines capturing only the core concept",
+  "summary": "comprehensive 8-12 line summary covering key concepts, main points, practical applications, and important takeaways from the video",
   "notes": [
     {
       "heading": "topic-relevant section heading",

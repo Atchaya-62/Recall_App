@@ -1,23 +1,19 @@
 import { useState } from 'react';
-import { BookOpenText, Loader2, Sparkles } from 'lucide-react';
+import { BookOpenText, Loader2, Sparkles, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { generateCoursePlan } from '@/lib/courseGenerator';
-import { CourseGeneratorInput, CourseGoal, CourseLevel, GeneratedCoursePlan } from '@/types';
+import { CourseGeneratorInput, GeneratedCoursePlan } from '@/types';
 import { addStoredCourse } from '@/lib/courseStorage';
 
-const COURSE_LEVELS: CourseLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
-const COURSE_GOALS: CourseGoal[] = ['Placements', 'Competitive Programming', 'Concepts', 'Interview Prep'];
 const LANGUAGES = ['Python', 'Java', 'C++', 'JavaScript', 'TypeScript', 'Go', 'None (General Topic)'];
 
 export default function CourseGenerator() {
   const navigate = useNavigate();
   const [topic, setTopic] = useState('');
   const [programmingLanguage, setProgrammingLanguage] = useState('None (General Topic)');
-  const [currentLevel, setCurrentLevel] = useState<CourseLevel>('Beginner');
-  const [goal, setGoal] = useState<CourseGoal>('Placements');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerate = async (event: React.FormEvent) => {
@@ -30,8 +26,6 @@ export default function CourseGenerator() {
     const input: CourseGeneratorInput = {
       topic: topic.trim(),
       ...(programmingLanguage !== 'None (General Topic)' && { programmingLanguage }),
-      currentLevel,
-      goal,
     };
 
     setIsGenerating(true);
@@ -50,6 +44,18 @@ export default function CourseGenerator() {
   return (
     <div className="min-h-screen pt-24 pb-16">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        {/* Back Button */}
+        <div className="flex justify-start">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="glass border border-white/10 hover:bg-white/5 text-gray-300 hover:text-white"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+        </div>
+
         <section className="glass-strong rounded-3xl p-6 sm:p-10 border border-white/10 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-amber-500/20 to-orange-500/10 blur-3xl" />
 
@@ -61,7 +67,7 @@ export default function CourseGenerator() {
 
             <h1 className="text-3xl sm:text-5xl font-bold mb-3">Build a personalized roadmap in seconds</h1>
             <p className="text-gray-300 max-w-3xl text-base sm:text-lg">
-              Enter one topic, answer 3 focused questions, and generate a complete module roadmap with YouTube lessons,
+              Enter a topic and optionally select a programming language to generate a complete module roadmap with YouTube lessons,
               checkpoints, and progress tracking.
             </p>
           </div>
@@ -81,51 +87,19 @@ export default function CourseGenerator() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">1. Preferred Programming Language (Optional)</label>
-                <select
-                  value={programmingLanguage}
-                  onChange={(event) => setProgrammingLanguage(event.target.value)}
-                  className="w-full h-11 rounded-xl bg-white/5 border border-white/20 px-3 text-sm"
-                >
-                  {LANGUAGES.map((language) => (
-                    <option key={language} value={language} className="bg-neutral-900">
-                      {language}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">2. Current Level</label>
-                <select
-                  value={currentLevel}
-                  onChange={(event) => setCurrentLevel(event.target.value as CourseLevel)}
-                  className="w-full h-11 rounded-xl bg-white/5 border border-white/20 px-3 text-sm"
-                >
-                  {COURSE_LEVELS.map((level) => (
-                    <option key={level} value={level} className="bg-neutral-900">
-                      {level}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">3. Goal</label>
-                <select
-                  value={goal}
-                  onChange={(event) => setGoal(event.target.value as CourseGoal)}
-                  className="w-full h-11 rounded-xl bg-white/5 border border-white/20 px-3 text-sm"
-                >
-                  {COURSE_GOALS.map((item) => (
-                    <option key={item} value={item} className="bg-neutral-900">
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm text-gray-300">Programming Language (Optional)</label>
+              <select
+                value={programmingLanguage}
+                onChange={(event) => setProgrammingLanguage(event.target.value)}
+                className="w-full h-11 rounded-xl bg-white/5 border border-white/20 px-3 text-sm"
+              >
+                {LANGUAGES.map((language) => (
+                  <option key={language} value={language} className="bg-neutral-900">
+                    {language}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <Button

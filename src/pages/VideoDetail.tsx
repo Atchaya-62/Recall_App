@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { ExternalLink, FolderOpen, Clock, CheckCircle2, Edit3, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ExternalLink, FolderOpen, Clock, CheckCircle2, Edit3, ChevronDown, ChevronUp, Loader2, FileText, Globe, Download } from 'lucide-react';
 import { useVideo, useFlashcards, useUpdateVideo, useUpdateFlashcard, useFolders } from '@/hooks/useData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,15 +14,129 @@ import {
 } from '@/components/ui/dialog';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
+import jsPDF from 'jspdf';
 
 type EditableNote = {
   heading: string;
   content: string;
 };
 
+const downloadKeyPointsAsPDF = (video: any) => {
+  const doc = new jsPDF();
+
+  let yPosition = 30;
+
+  // Add title
+  doc.setFontSize(20);
+  doc.text(video.title || 'Video Key Points', 20, yPosition);
+  yPosition += 20;
+
+  // Add summary if available (brief)
+  if (video.summary) {
+    doc.setFontSize(14);
+    doc.text('Summary:', 20, yPosition);
+    yPosition += 10;
+
+    doc.setFontSize(10);
+    const summaryLines = doc.splitTextToSize(video.summary || 'No summary available', 170);
+    // Only include first 3 lines of summary for key points focus
+    const briefSummary = summaryLines.slice(0, 3);
+    doc.text(briefSummary, 20, yPosition);
+    yPosition += briefSummary.length * 4 + 10;
+  }
+
+  // Add key notes (main focus)
+  if (video.notes && video.notes.length > 0) {
+    doc.setFontSize(16);
+    doc.text('Key Points & Notes:', 20, yPosition);
+    yPosition += 15;
+
+    doc.setFontSize(12);
+    video.notes.forEach((note: string, index: number) => {
+      if (yPosition > 270) {
+        doc.addPage();
+        yPosition = 30;
+      }
+
+      // Parse note heading and content
+      const trimmed = note.trim();
+      const headingMatch = trimmed.match(/^###\s*(.+)$/m);
+      const heading = headingMatch ? headingMatch[1].trim() : `Note ${index + 1}`;
+
+      // Add note heading
+      doc.setFontSize(13);
+      const headingText = `${index + 1}. ${heading}`;
+      const headingLines = doc.splitTextToSize(headingText, 160);
+      doc.text(headingLines, 20, yPosition);
+      yPosition += headingLines.length * 5 + 5;
+
+      // Add note content (remove heading and clean up)
+      doc.setFontSize(11);
+      const contentText = trimmed
+        .replace(/^###\s*.+\n/, '') // Remove heading
+        .replace(/^#+\s*.+\n/, '') // Remove any other headings
+        .replace(/```[\s\S]*?```/g, '[code block]') // Replace code blocks
+        .replace(/\*\*/g, '') // Remove bold
+        .replace(/\*/g, '') // Remove italic
+        .trim();
+
+      if (contentText) {
+        const contentLines = doc.splitTextToSize(contentText, 160);
+        doc.text(contentLines, 30, yPosition);
+        yPosition += contentLines.length * 4 + 10;
+      } else {
+        yPosition += 5; // Small gap if no content
+      }
+    });
+  }
+
+  // Add flashcards if available (key concepts)
+  if (video.flashcards && video.flashcards.length > 0) {
+    if (yPosition > 200) {
+      doc.addPage();
+      yPosition = 30;
+    }
+
+    doc.setFontSize(14);
+    doc.text('Key Concepts (Flashcards):', 20, yPosition);
+    yPosition += 10;
+
+    doc.setFontSize(11);
+    video.flashcards.slice(0, 15).forEach((card: any, index: number) => {
+      if (yPosition > 270) {
+        doc.addPage();
+        yPosition = 30;
+      }
+
+      doc.text(`Q${index + 1}: ${card.question}`, 20, yPosition);
+      yPosition += 6;
+
+      const answerLines = doc.splitTextToSize(`A: ${card.answer}`, 160);
+      doc.text(answerLines, 30, yPosition);
+      yPosition += answerLines.length * 4 + 6;
+    });
+  }
+
+  // Add metadata at the bottom
+  const pageHeight = doc.internal.pageSize.height;
+  doc.setFontSize(8);
+  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, pageHeight - 20);
+  doc.text(`Video: ${video.youtube_url || 'N/A'}`, 20, pageHeight - 10);
+
+  // Save the PDF
+  const fileName = (video.title || 'video-key-points')
+    .replace(/[^a-z0-9]/gi, '_')
+    .toLowerCase()
+    .substring(0, 50);
+  doc.save(`${fileName}-key-points.pdf`);
+};
+
 export default function VideoDetail() {
   const { id } = useParams();
+  const { t } = useLanguage();
   const [summaryExpanded, setSummaryExpanded] = useState(true);
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(true);
   const [flashcardsExpanded, setFlashcardsExpanded] = useState(true);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -378,13 +492,59 @@ export default function VideoDetail() {
               onClick={() => setSummaryExpanded(!summaryExpanded)}
               className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-colors"
             >
-              <h2 className="text-2xl font-bold">Summary</h2>
+              <h2 className="text-2xl font-bold">{t('video.summary')}</h2>
               {summaryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
             </button>
 
             {summaryExpanded && (
               <div className="px-6 pb-6">
                 <p className="text-gray-300 leading-relaxed">{video.summary}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Transcript Section */}
+        {video.transcript && (
+          <div className="glass rounded-2xl mb-6 overflow-hidden">
+            <button
+              onClick={() => setTranscriptExpanded(!transcriptExpanded)}
+              className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-amber-400" />
+                <h2 className="text-2xl font-bold">{t('video.transcript')}</h2>
+                {video.transcript.originalLanguage !== 'en' && (
+                  <span className="px-2 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold border border-blue-500/30 flex items-center">
+                    <Globe className="w-3 h-3 mr-1" />
+                    {video.transcript.originalLanguage.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              {transcriptExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+
+            {transcriptExpanded && (
+              <div className="px-6 pb-6">
+                <div className="space-y-4">
+                  {video.transcript.originalLanguage !== 'en' && (
+                    <div className="glass rounded-xl p-4 border border-blue-500/20">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Globe className="w-4 h-4 text-blue-400" />
+                        <span className="text-sm font-semibold text-blue-400">Original Transcript ({video.transcript.originalLanguage.toUpperCase()})</span>
+                      </div>
+                      <p className="text-gray-400 text-sm leading-relaxed">{video.transcript.original}</p>
+                    </div>
+                  )}
+
+                  <div className="glass rounded-xl p-4 border border-amber-500/20">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <FileText className="w-4 h-4 text-amber-400" />
+                      <span className="text-sm font-semibold text-amber-400">English Transcript</span>
+                    </div>
+                    <p className="text-gray-300 leading-relaxed">{video.transcript.english}</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -401,10 +561,21 @@ export default function VideoDetail() {
                 <h2 className="text-2xl font-bold">Key Notes</h2>
                 {notesExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
               </button>
-              <Button variant="outline" size="sm" className="glass border-white/20" onClick={openNotesEditor}>
-                <Edit3 className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button
+                  onClick={() => downloadKeyPointsAsPDF(video)}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </Button>
+                <Button variant="outline" size="sm" className="glass border-white/20" onClick={openNotesEditor}>
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  Edit
+                </Button>
+              </div>
             </div>
 
             {notesExpanded && (

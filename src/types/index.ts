@@ -5,6 +5,14 @@ export interface User {
   avatarUrl?: string;
   createdAt: string;
   updatedAt?: string;
+  language?: string; // Language preference (e.g., 'en', 'es', 'fr', 'ta')
+}
+
+export interface UserSettings {
+  userId: string;
+  language: string; // ISO language code
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Folder {
@@ -31,6 +39,11 @@ export interface Video {
   watched: boolean;
   flashcardsCount?: number;
   isExisting?: boolean;
+  transcript?: {
+    original: string;
+    originalLanguage: string;
+    english: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -69,8 +82,6 @@ export type CourseGoal =
 export interface CourseGeneratorInput {
   topic: string;
   programmingLanguage?: string;
-  currentLevel: CourseLevel;
-  goal: CourseGoal;
 }
 
 export interface CourseVideoItem {

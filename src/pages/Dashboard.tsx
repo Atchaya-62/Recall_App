@@ -4,11 +4,9 @@ import { Youtube, Sparkles, ArrowRight, Loader2, Target, Brain } from 'lucide-re
 import VideoCard from '@/components/features/VideoCard';
 import { useFolders, useVideos, useAllFlashcards } from '@/hooks/useData';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { getDailyQuizSnapshot } from '@/lib/dailyQuiz';
 
 export default function Dashboard() {
-  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [showAllRecentVideos, setShowAllRecentVideos] = useState(false);
   const navigate = useNavigate();
 
@@ -21,13 +19,6 @@ export default function Dashboard() {
 
   const quizSnapshot = useMemo(() => getDailyQuizSnapshot(), []);
   const recentVideos = showAllRecentVideos ? videos : videos.slice(0, 6);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (youtubeUrl.trim()) {
-      navigate(`/process?url=${encodeURIComponent(youtubeUrl)}`);
-    }
-  };
 
   const getFolderName = (folderId: string | null) => {
     if (!folderId) return undefined;
@@ -48,46 +39,38 @@ export default function Dashboard() {
                 <span className="text-sm sm:text-base font-semibold text-amber-400">Transform YouTube Into Knowledge</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl leading-tight font-bold mb-4">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl leading-tight font-bold mb-8">
                 Learn Smarter,<br />
                 <span className="text-gradient">Remember Better</span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-300 mb-6 sm:mb-8 max-w-2xl">
-                Paste any YouTube link. Get AI-generated notes and flashcards in seconds.
-                Organize everything. Never forget what you learned.
-              </p>
-
-              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 max-w-2xl">
-                <div className="flex-1 min-w-0 relative">
-                  <Youtube className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <Input
-                    type="url"
-                    placeholder="Paste YouTube URL here..."
-                    value={youtubeUrl}
-                    onChange={(e) => setYoutubeUrl(e.target.value)}
-                    className="pl-12 h-12 sm:h-14 glass-strong border-white/20 text-base sm:text-lg"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold text-base sm:text-lg group"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+                <div
+                  onClick={() => navigate('/course-generator')}
+                  className="glass rounded-2xl p-6 border border-white/10 cursor-pointer hover:bg-white/5 transition-colors group"
                 >
-                  Generate Notes
-                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </form>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold mb-2 group-hover:text-amber-400 transition-colors">Build AI Course Roadmap</h3>
+                      <p className="text-gray-400 text-sm">Create structured learning paths with AI-generated courses</p>
+                    </div>
+                    <Brain className="w-8 h-8 text-amber-400 group-hover:scale-110 transition-transform" />
+                  </div>
+                </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate('/course-generator')}
-                className="mt-3 glass border-white/20 hover:bg-white/10"
-              >
-                <Brain className="w-4 h-4 mr-2 text-amber-400" />
-                Build AI Course Roadmap
-              </Button>
+                <div
+                  onClick={() => navigate('/process')}
+                  className="glass rounded-2xl p-6 border border-white/10 cursor-pointer hover:bg-white/5 transition-colors group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold mb-2 group-hover:text-amber-400 transition-colors">Paste Link & Generate Notes</h3>
+                      <p className="text-gray-400 text-sm">Transform YouTube videos into AI-powered notes and flashcards</p>
+                    </div>
+                    <Youtube className="w-8 h-8 text-amber-400 group-hover:scale-110 transition-transform" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -179,7 +162,7 @@ export default function Dashboard() {
                     Start by adding your first YouTube video to get AI-generated notes and flashcards!
                   </p>
                   <Button
-                    onClick={() => document.querySelector<HTMLInputElement>('input[type="url"]')?.focus()}
+                    onClick={() => navigate('/process')}
                     className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold"
                   >
                     <Youtube className="w-4 h-4 mr-2" />

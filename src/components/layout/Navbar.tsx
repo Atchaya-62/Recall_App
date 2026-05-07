@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BookMarked, FolderOpen, LayoutDashboard, User, LogOut, Target, Flame, Zap, TrendingUp, LibraryBig } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,6 +18,7 @@ import { getChallengeSnapshot } from '@/lib/challenges';
 export default function Navbar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const { t } = useLanguage();
   const [quizSnapshot, setQuizSnapshot] = useState(() => getDailyQuizSnapshot());
   const [challengeSnapshot, setChallengeSnapshot] = useState(() => getChallengeSnapshot());
 
@@ -90,8 +92,8 @@ export default function Navbar() {
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black font-semibold'
                   : 'text-gray-300 hover:text-white hover:bg-white/5'
               }`}
-              title="Dashboard"
-              aria-label="Dashboard"
+              title={t('nav.dashboard')}
+              aria-label={t('nav.dashboard')}
             >
               <LayoutDashboard className="w-4 h-4" />
             </Link>
@@ -104,8 +106,8 @@ export default function Navbar() {
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black font-semibold'
                   : 'text-gray-300 hover:text-white hover:bg-white/5'
               }`}
-              title="Folders"
-              aria-label="Folders"
+              title={t('nav.folders')}
+              aria-label={t('nav.folders')}
             >
               <FolderOpen className="w-4 h-4" />
             </Link>
@@ -196,7 +198,7 @@ export default function Navbar() {
                 >
                   <Link to="/profile" className="flex items-center">
                     <User className="mr-2 h-4 w-4" />
-                    Profile
+                    {t('nav.profile')}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-white/10" />
@@ -205,7 +207,7 @@ export default function Navbar() {
                   onClick={handleSignOut}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
+                  {t('nav.logout')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

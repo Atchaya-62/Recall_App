@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, CheckCircle2, Sparkles, FileText, BookMarked, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, Sparkles, FileText, BookMarked, AlertCircle, Youtube, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useCreateVideo } from '@/hooks/useData';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -107,15 +108,24 @@ export default function ProcessVideo() {
   const url = searchParams.get('url');
   const folderId = searchParams.get('folderId');
 
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [processing, setProcessing] = useState<ProcessingStatus | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
   const [existingVideo, setExistingVideo] = useState<ExistingVideoInfo | null>(null);
   const [isDeletingExisting, setIsDeletingExisting] = useState(false);
+  const [submittedUrl, setSubmittedUrl] = useState<string | null>(null);
   const startedRef = useRef(false);
   const queryClient = useQueryClient();
 
   const createVideo = useCreateVideo();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (youtubeUrl.trim()) {
+      setSubmittedUrl(youtubeUrl.trim());
+    }
+  };
 
   const extractVideoId = (input: string): string | null => {
     const patterns = [
@@ -153,8 +163,9 @@ export default function ProcessVideo() {
   };
 
   useEffect(() => {
-    if (!url) {
-      navigate('/');
+    if (!submittedUrl) {
+      // Reset the started ref when there's no URL (form view)
+      startedRef.current = false;
       return;
     }
 
@@ -182,17 +193,17 @@ export default function ProcessVideo() {
           return;
         }
 
-        const ytVideoId = extractVideoId(url);
+        const ytVideoId = extractVideoId(submittedUrl);
         if (!ytVideoId) {
           toast.error('Invalid YouTube URL');
-          navigate('/');
+          setSubmittedUrl(null); // Reset to show form again
           return;
         }
 
         const videoInfo = await getVideoInfo(ytVideoId);
 
         const videoPayload = {
-          youtubeUrl: url,
+          youtubeUrl: submittedUrl,
           videoId: ytVideoId,
           title: videoInfo.title,
           thumbnail: videoInfo.thumbnail,
@@ -250,7 +261,7 @@ export default function ProcessVideo() {
         const invokeProcessVideo = async (allowRetry: boolean): Promise<any> => {
           console.log('[ProcessVideo] Invoking process-video...');
           const { data, error } = await supabase.functions.invoke('process-video', {
-            body: { videoId: newVideo.id, youtubeUrl: url },
+            body: { videoId: newVideo.id, youtubeUrl: submittedUrl },
           });
 
           if (!error) {
@@ -312,7 +323,7 @@ export default function ProcessVideo() {
     };
 
     processVideo();
-  }, [url, folderId, navigate, queryClient]);
+  }, [submittedUrl, folderId, navigate, queryClient]);
 
   useEffect(() => {
     if (!videoId) return;
@@ -488,7 +499,57 @@ export default function ProcessVideo() {
 
       <div className="min-h-screen pt-24 pb-16 flex items-center justify-center">
         <div className="max-w-2xl w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="glass-strong rounded-3xl p-12 text-center">
+          {/* Back Button */}
+          <div className="flex justify-start mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/')}
+              className="glass border border-white/10 hover:bg-white/5 text-gray-300 hover:text-white"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </div>
+
+          {!submittedUrl ? (
+            <div className="glass-strong rounded-3xl p-8 sm:p-12 text-center">
+              <div className="flex items-center justify-center space-x-2 mb-6">
+                <Sparkles className="w-6 h-6 text-amber-400" />
+                <span className="text-lg font-semibold text-amber-400">Transform YouTube Into Knowledge</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-4xl font-bold mb-4">
+                Paste Link & Generate Notes
+              </h1>
+
+              <p className="text-gray-300 mb-8 max-w-lg mx-auto">
+                Paste any YouTube link and get AI-generated notes and flashcards in seconds.
+              </p>
+
+              <div className="max-w-lg mx-auto">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 min-w-0 relative">
+                    <Youtube className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Input
+                      type="url"
+                      placeholder="Paste YouTube URL here..."
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                      className="pl-12 h-12 sm:h-14 glass-strong border-white/20 text-base sm:text-lg"
+                    />
+                  </div>
+                  <Button
+                    size="lg"
+                    className="w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-black font-bold text-base sm:text-lg"
+                    onClick={(e) => handleSubmit(e as any)}
+                  >
+                    Generate Notes
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="glass-strong rounded-3xl p-12 text-center">
           {processing?.stage === 'complete' ? (
             <>
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mx-auto mb-6">
@@ -560,6 +621,7 @@ export default function ProcessVideo() {
             </>
           )}
           </div>
+          )}
         </div>
       </div>
     </>

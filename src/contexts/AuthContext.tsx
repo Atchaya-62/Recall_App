@@ -23,20 +23,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const appBaseUrl = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '') || window.location.origin;
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let isMounted = true;
+
+    const loadInitialSession = async () => {
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<{ data: { session: Session | null } }>((_, reject) => {
+        window.setTimeout(() => reject(new Error('Timed out loading auth session')), 5000);
+      });
+
+      try {
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+        if (!isMounted) return;
+
+        console.log('AuthContext: Initial session loaded:', !!session, session?.user?.id);
+        setSession(session);
+        setUser(session?.user ?? null);
+      } catch (error) {
+        if (!isMounted) return;
+
+        console.error('AuthContext: Failed to load initial session:', error);
+        setSession(null);
+        setUser(null);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInitialSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('AuthContext: Auth state changed:', _event, !!session, session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, name: string) => {
