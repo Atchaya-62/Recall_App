@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { generateCoursePlan } from '@/lib/courseGenerator';
-import { CourseGeneratorInput, GeneratedCoursePlan } from '@/types';
-import { addStoredCourse } from '@/lib/courseStorage';
+import { CourseGeneratorInput } from '@/types';
+import { coursesApi } from '@/services/courses';
 
 const LANGUAGES = ['Python', 'Java', 'C++', 'JavaScript', 'TypeScript', 'Go', 'None (General Topic)'];
 
@@ -31,7 +31,7 @@ export default function CourseGenerator() {
     setIsGenerating(true);
     try {
       const generatedPlan = await generateCoursePlan(input);
-      const [savedCourse] = addStoredCourse(generatedPlan);
+      const savedCourse = await coursesApi.createCourse(generatedPlan);
       toast.success('Personalized course generated and saved.');
       navigate('/courses', { state: { selectedCourseId: savedCourse?.id || null } });
     } catch (error: any) {

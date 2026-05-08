@@ -651,6 +651,26 @@ Create production `.env` file with:
 
 ### Estimated Monthly Costs (paid tiers)
 - **Supabase Pro**: $25/month (2GB database, 8GB bandwidth)
+
+---
+
+## Generated Courses Storage (Supabase)
+
+By default, generated courses and progress are now stored in Supabase (not browser localStorage).
+
+1. Open Supabase Dashboard -> SQL Editor.
+2. Run the SQL script from:
+
+```
+supabase/courses_schema.sql
+```
+
+This script creates:
+- `generated_courses` table (stores full generated course plan as JSONB)
+- `course_tracking` table (stores completed modules and quiz scores)
+- RLS policies so users can only access their own rows
+
+After running the script, existing legacy local courses are migrated automatically on first load of the Courses page for each signed-in user.
 - **Google AI**: ~$0.50-5/month depending on usage
 - **Google Cloud**: Minimal for OAuth ($0-10/month)
 

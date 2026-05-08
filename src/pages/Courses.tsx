@@ -4,14 +4,11 @@ import { CheckCircle2, Clock3, ExternalLink, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {
-  computeStoredCourseProgress,
-  deleteStoredCourse,
-  loadStoredCourses,
-  loadStoredTracking,
-  saveStoredTracking,
+  computeCourseProgress,
+  coursesApi,
   type LocalTracking,
   type StoredCourse,
-} from '@/lib/courseStorage';
+} from '@/services/courses';
 import { GeneratedCoursePlan } from '@/types';
 
 const emptyTracking = (): LocalTracking => ({ completedModuleIds: [], quizScores: [] });
@@ -152,40 +149,67 @@ const buildQuizQuestions = (plan: GeneratedCoursePlan, moduleIndex: number): Mod
 export default function Courses() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [courses, setCourses] = useState<StoredCourse[]>(() => loadStoredCourses());
+  const [courses, setCourses] = useState<StoredCourse[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [trackingByCourseId, setTrackingByCourseId] = useState<Record<string, LocalTracking>>({});
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(() => {
     const locationStateCourseId = (location.state as { selectedCourseId?: string } | null)?.selectedCourseId;
-    return searchParams.get('courseId') || locationStateCourseId || loadStoredCourses()[0]?.id || null;
+    return searchParams.get('courseId') || locationStateCourseId || null;
   });
   const [tracking, setTracking] = useState<LocalTracking>(emptyTracking());
   const [activeQuiz, setActiveQuiz] = useState<ActiveModuleQuiz | null>(null);
   const [quizSelections, setQuizSelections] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const sync = () => setCourses(loadStoredCourses());
-    window.addEventListener('storage', sync);
-    window.addEventListener('course-storage-updated', sync as EventListener);
-    window.addEventListener('focus', sync);
-    document.addEventListener('visibilitychange', sync);
+    let isMounted = true;
+
+    const load = async () => {
+      setCoursesLoading(true);
+      try {
+        await coursesApi.migrateLegacyLocalCourses();
+        const [fetchedCourses, fetchedTracking] = await Promise.all([
+          coursesApi.listCourses(),
+          coursesApi.listTrackingByCourseId(),
+        ]);
+
+        if (!isMounted) return;
+        setCourses(fetchedCourses);
+        setTrackingByCourseId(fetchedTracking);
+
+        const preferredId =
+          searchParams.get('courseId') ||
+          (location.state as { selectedCourseId?: string } | null)?.selectedCourseId ||
+          fetchedCourses[0]?.id ||
+          null;
+        setSelectedCourseId((current) => current || preferredId);
+      } catch (error: any) {
+        if (!isMounted) return;
+        toast.error(error?.message || 'Failed to load saved courses.');
+      } finally {
+        if (isMounted) {
+          setCoursesLoading(false);
+        }
+      }
+    };
+
+    load();
+
     return () => {
-      window.removeEventListener('storage', sync);
-      window.removeEventListener('course-storage-updated', sync as EventListener);
-      window.removeEventListener('focus', sync);
-      document.removeEventListener('visibilitychange', sync);
+      isMounted = false;
     };
   }, []);
 
   useEffect(() => {
     const nextSelectedId = searchParams.get('courseId') || (location.state as { selectedCourseId?: string } | null)?.selectedCourseId || courses[0]?.id || null;
-    if (!selectedCourseId && nextSelectedId) {
+    if (!selectedCourseId && nextSelectedId && courses.some((entry) => entry.id === nextSelectedId)) {
       setSelectedCourseId(nextSelectedId);
     }
   }, [courses, location.state, searchParams, selectedCourseId]);
 
   useEffect(() => {
     if (!selectedCourseId) return;
-    setTracking(loadStoredTracking(selectedCourseId));
-  }, [selectedCourseId]);
+    setTracking(trackingByCourseId[selectedCourseId] || emptyTracking());
+  }, [selectedCourseId, trackingByCourseId]);
 
   useEffect(() => {
     if (courses.length === 0) {
@@ -212,10 +236,10 @@ export default function Courses() {
 
   const handleSelectCourse = (courseId: string) => {
     setSelectedCourseId(courseId);
-    setTracking(loadStoredTracking(courseId));
+    setTracking(trackingByCourseId[courseId] || emptyTracking());
   };
 
-  const handleToggleModuleCompletion = (moduleId: string) => {
+  const handleToggleModuleCompletion = async (moduleId: string) => {
     if (!selectedPlan || !selectedCourseId) return;
 
     const completedModuleIds = tracking.completedModuleIds.includes(moduleId)
@@ -228,27 +252,45 @@ export default function Courses() {
     };
 
     setTracking(updatedTracking);
-    saveStoredTracking(selectedCourseId, updatedTracking);
+    setTrackingByCourseId((current) => ({ ...current, [selectedCourseId]: updatedTracking }));
+
+    try {
+      const saved = await coursesApi.upsertTracking(selectedCourseId, updatedTracking);
+      setTracking(saved);
+      setTrackingByCourseId((current) => ({ ...current, [selectedCourseId]: saved }));
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to save module completion.');
+    }
   };
 
-  const handleDeleteCourse = (courseId: string) => {
+  const handleDeleteCourse = async (courseId: string) => {
     const courseTitle = courses.find((entry) => entry.id === courseId)?.plan.title || 'This course';
     const confirmed = window.confirm(`Delete ${courseTitle}? This will also remove its progress.`);
     if (!confirmed) return;
 
-    const nextCourses = deleteStoredCourse(courseId);
-    setCourses(nextCourses);
-    toast.success('Course deleted.');
+    try {
+      await coursesApi.deleteCourse(courseId);
+      const nextCourses = courses.filter((entry) => entry.id !== courseId);
+      setCourses(nextCourses);
+      setTrackingByCourseId((current) => {
+        const next = { ...current };
+        delete next[courseId];
+        return next;
+      });
+      toast.success('Course deleted.');
 
-    if (selectedCourseId === courseId) {
-      const nextSelected = nextCourses[0]?.id || null;
-      setSelectedCourseId(nextSelected);
-      setTracking(nextSelected ? loadStoredTracking(nextSelected) : emptyTracking());
+      if (selectedCourseId === courseId) {
+        const nextSelected = nextCourses[0]?.id || null;
+        setSelectedCourseId(nextSelected);
+        setTracking(nextSelected ? trackingByCourseId[nextSelected] || emptyTracking() : emptyTracking());
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete course.');
     }
   };
 
   const selectedCourseProgress = (courseId: string, totalModules: number) =>
-    computeStoredCourseProgress(courseId, totalModules);
+    computeCourseProgress(trackingByCourseId[courseId] || emptyTracking(), totalModules);
 
   const openModuleQuiz = (moduleId: string) => {
     if (!selectedPlan) return;
@@ -272,7 +314,7 @@ export default function Courses() {
     setQuizSelections({});
   };
 
-  const submitModuleQuiz = () => {
+  const submitModuleQuiz = async () => {
     if (!selectedPlan || !selectedCourseId || !activeQuiz) return;
 
     const score = activeQuiz.questions.reduce(
@@ -286,7 +328,17 @@ export default function Courses() {
     };
 
     setTracking(updatedTracking);
-    saveStoredTracking(selectedCourseId, updatedTracking);
+    setTrackingByCourseId((current) => ({ ...current, [selectedCourseId]: updatedTracking }));
+
+    try {
+      const saved = await coursesApi.upsertTracking(selectedCourseId, updatedTracking);
+      setTracking(saved);
+      setTrackingByCourseId((current) => ({ ...current, [selectedCourseId]: saved }));
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to save quiz score.');
+      return;
+    }
+
     setActiveQuiz({ ...activeQuiz, submitted: true, score });
     toast.success(`Module quiz completed: ${score}/5`);
   };
@@ -305,7 +357,11 @@ export default function Courses() {
           </div>
         </section>
 
-        {courses.length === 0 ? (
+        {coursesLoading ? (
+          <div className="glass rounded-2xl p-8 border border-white/10 text-center text-gray-300">
+            Loading saved courses...
+          </div>
+        ) : courses.length === 0 ? (
           <div className="glass rounded-2xl p-8 border border-white/10 text-center text-gray-300">
             No saved courses yet. Generate one from the Course Generator page.
           </div>
